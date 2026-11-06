@@ -103,9 +103,11 @@ const passA = (r) => !any('ativos') || r.ativos.some(a => has('ativos', a));
 const passP = (r) => !any('peritos') || nomesOf(r).some(p => has('peritos', p));
 const passT = (r) => !any('at') || has('at', atOf(r));
 const passJ = (r) => !any('juls') || has('juls', r.id);
+const anoOf = (r) => +r.data.slice(-4);
+const passY = (r) => !any('anos') || has('anos', anoOf(r));
 const q = (st.q || '').trim().toLowerCase();
 const passQ = (r) => !q || [r.id, r.cnj, r.ativos.join(' '), nomesOf(r).join(' ')].join(' ').toLowerCase().includes(q);
-const F = J.filter(r => passA(r) && passP(r) && passT(r) && passQ(r) && passJ(r));
+const F = J.filter(r => passA(r) && passP(r) && passT(r) && passQ(r) && passJ(r) && passY(r));
 const N = F.length;
 const plural = (n, s, p) => n === 1 ? s : p;
 const allPeritos = Array.from(new Set(J.flatMap(nomesOf))).sort((a, b) => a.localeCompare(b, 'pt'));
@@ -119,11 +121,17 @@ const hMin = honItens.length ? honItens[0].v : 0, hMax = honItens.length ? honIt
 const escala = Math.max(1, hMax * 1.05);
 const hon = { tem: honItens.length > 0, faixa: honItens.length ? (honItens.length === 1 ? brl(hMin) : brl(hMin) + ' → ' + brl(hMax)) : 'Sem base para cálculo', nTxt: honItens.length + (honItens.length === 1 ? ' perícia' : ' perícias'), x0: 100 * hMin / escala, xw: 100 * (hMax - hMin) / escala, itens: honItens.map((h, i) => { const sel = has('juls', h.id); return { ...h, pos: String(i + 1), txt: brl(h.v), x: 100 * h.v / escala, sel, bg: sel ? '#F1F7D9' : '#FFFFFF', bd: sel ? '#C9E43A' : '#ECEDE8', tip: 'Honorários de ' + brl(h.v) + ' (' + h.ev.toLowerCase() + ', ' + h.d + ') na perícia do julgamento ' + h.id + ', sobre ' + h.ativo.toLowerCase() + '. Clique para ver só este julgamento nos demais gráficos.', pick: () => tog('juls', h.id) }; }), fora: honFora, foraN: honFora.length, temFora: honFora.length > 0 };
 // Ativos: julgamentos distintos por rótulo (sem o próprio filtro de ativo)
-const baseAt = J.filter(r => passP(r) && passT(r) && passQ(r) && passJ(r));
+const baseAt = J.filter(r => passP(r) && passT(r) && passQ(r) && passJ(r) && passY(r));
 const maxAt = Math.max(1, ...ATIVOS.map(a => baseAt.filter(r => r.ativos.includes(a)).length));
 const ativos = ATIVOS.map(a => { const n = baseAt.filter(r => r.ativos.includes(a)).length; const sel = has('ativos', a); return { k: a, n, w: 100 * n / maxAt, sel, fw: sel ? 700 : 500, bar: sel ? STRIPE : (any('ativos') ? '#BFC2BA' : INK), op: (any('ativos') && !sel) ? 0.55 : 1, tip: a + ': analisado em ' + n + ' ' + plural(n, 'julgamento', 'julgamentos') + ' do filtro atual. Clique para ver só esses julgamentos nos demais gráficos.', pick: () => tog('ativos', a) }; }).sort((x, y) => y.n - x.n);
 // Peritos: atos de nomeação (sem o próprio filtro de perito)
-const baseP = J.filter(r => passA(r) && passT(r) && passQ(r) && passJ(r));
+const baseP = J.filter(r => passA(r) && passT(r) && passQ(r) && passJ(r) && passY(r));
+// Julgamentos por ano (sem o próprio filtro de ano)
+const ANOS = [2020, 2021, 2022, 2023, 2024, 2025];
+const baseY = J.filter(r => passA(r) && passP(r) && passT(r) && passQ(r) && passJ(r));
+const maxY = Math.max(1, ...ANOS.map(a => baseY.filter(r => anoOf(r) === a).length));
+const anosCard = ANOS.map(a => { const n = baseY.filter(r => anoOf(r) === a).length; const sel = has('anos', a); const ts = any('anos'); const top = n === maxY && n > 0; return { k: String(a), n: String(n), h: Math.max(4, Math.round(130 * n / maxY)), sel, op: ts && !sel ? 0.4 : 1, rbg: sel ? '#F1F7D9' : 'transparent', bar: sel ? INK : (top ? STRIPE : '#D3D6CE'), tagBg: top || sel ? INK : 'transparent', tagFg: top || sel ? '#FFFFFF' : MUTE, tip: n + ' ' + plural(n, 'julgamento de apelação', 'julgamentos de apelação') + ' em ' + a + (n ? ' (' + pctTxt(n, baseY.length) + ' dos julgamentos do filtro). Clique para ver só este ano nos demais gráficos.' : '. Nenhum julgamento da lista neste ano.'), pick: () => tog('anos', a) }; });
+const fAnos = ANOS.map(a => ({ k: String(a), n: J.filter(r => anoOf(r) === a).length, sel: has('anos', a), rowBg: rowBg(has('anos', a)), pick: () => tog('anos', a) }));
 const contagem = {};
 baseP.forEach(r => r.noms.forEach(([nm, rel]) => { contagem[nm] = contagem[nm] || { a: 0, d: 0 }; if (rel === 'antes') contagem[nm].a++; else contagem[nm].d++; }));
 const maxP = Math.max(1, ...Object.values(contagem).map(c => c.a + c.d));
@@ -139,6 +147,7 @@ const kpis = [
   { k: 'Nomeações de peritos', v: String(nomTot), s: Object.keys(contagem).length ? nomAntes + ' anteriores ao julgamento · ' + new Set(F.flatMap(nomesOf)).size + ' peritos distintos' : 'Nenhuma nomeação documentada', chip: 'Com ressalvas', ...ck('warn'), ic: ICON.pess, icBg: '#F6F7F3', tip: 'Quantas vezes peritos foram nomeados nos processos de 1º grau ligados aos julgamentos do filtro. Nomeações sucessivas não significam atuação simultânea.' }
 ];
 const chipsProc = [].concat(
+  (st.anos || []).map(a => ({ k: 'Ano ' + a, rm: () => tog('anos', a) })),
   (st.ativos || []).map(a => ({ k: a, rm: () => tog('ativos', a) })),
   (st.peritos || []).map(p => ({ k: p, rm: () => tog('peritos', p) })),
   (st.at || []).map(a => ({ k: 'Assistente técnico: ' + a, rm: () => tog('at', a) })),
@@ -366,7 +375,7 @@ const mkDd = (key, label, title, opts, radio) => {
     opts: opts.map(o => ({ ...o, mk: o.sel ? INK : '#FFFFFF', ck: o.sel ? '#FFFFFF' : 'transparent' })) };
 };
 const dds = tab === 'proc'
-  ? [mkDd('ativos', 'Patente / ativo', 'Ativo analisado (rótulo da fonte)', fAtivos), mkDd('peritos', 'Perito', 'Peritos nomeados nos casos vinculados', fPeritos), mkDd('at', 'Assistente técnico', 'Houve assistente técnico?', fAT)]
+  ? [mkDd('anos', 'Ano', 'Ano do julgamento', fAnos), mkDd('ativos', 'Patente / ativo', 'Ativo analisado (rótulo da fonte)', fAtivos), mkDd('peritos', 'Perito', 'Peritos nomeados nos casos vinculados', fPeritos), mkDd('at', 'Assistente técnico', 'Houve assistente técnico?', fAT)]
   : tab === 'per'
   ? [mkDd('pAtivos', 'Ativo periciado', 'Ativos que o perito já periciou', fPAt), mkDd('forms', 'Formação', 'Formação de graduação', fForm), mkDd('tempos', 'Tempo como perito', 'Tempo de atuação como perito judicial', fTempo)]
   : [mkDd('mAtivos', 'Ativo de PI', 'Ativo de PI (restringe os gráficos por ativo)', fMAt), mkDd('graus', 'Instância', 'Grau de jurisdição', fGrau), mkDd('amostra', 'Amostra', 'Questionários 09 e 10 (respostas idênticas)', fAmostra, true)];
@@ -375,8 +384,8 @@ return {
   ...HD, chipBase, chips: chipsAll, dds, nota,
   isProc: tab === 'proc', isSurvey: tab !== 'proc', isPer: tab === 'per', isMag: tab === 'mag', tProc: tb('proc'), tPer: tb('per'), tMag: tb('mag'),
   goProc: () => set({ tab: 'proc', open: null }), goPer: () => set({ tab: 'per', open: null }), goMag: () => set({ tab: 'mag', open: null }),
-  limpar: () => set({ ativos: [], peritos: [], at: [], juls: [], q: '', forms: [], tempos: [], pAtivos: [], pSel: [], graus: [], mAtivos: [], mSel: [], amostra: null, open: null }),
-  proc: { exportar: () => { const cab = ['Julgado', 'CNJ do recurso', 'Data do julgamento', 'Ativo (fonte)', 'Assistente técnico', 'Peritos nomeados', 'Peso do laudo']; const q2 = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; const linhas = [cab].concat(tabela.map(r => [r.id, r.cnj, r.data, r.ativoT, r.atT, r.nomT, r.pesoT])).map(l => l.map(q2).join(';')).join('\r\n'); const blob = new Blob(['\ufeff' + linhas], { type: 'text/csv;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'julgamentos_filtrados_' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }, N, kpis, hon, ativos, peritos, semPeritos: peritos.length === 0, tabela, vazio: N === 0, q: st.q || '', onQ: (e) => set({ q: e.target.value }), sort: () => set({ asc: !st.asc }), sortLbl: st.asc ? '↑ antigas' : '↓ recentes' },
+  limpar: () => set({ anos: [], ativos: [], peritos: [], at: [], juls: [], q: '', forms: [], tempos: [], pAtivos: [], pSel: [], graus: [], mAtivos: [], mSel: [], amostra: null, open: null }),
+  proc: { anosCard, anosBase: baseY.length, exportar: () => { const cab = ['Julgado', 'CNJ do recurso', 'Data do julgamento', 'Ativo (fonte)', 'Assistente técnico', 'Peritos nomeados', 'Peso do laudo']; const q2 = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; const linhas = [cab].concat(tabela.map(r => [r.id, r.cnj, r.data, r.ativoT, r.atT, r.nomT, r.pesoT])).map(l => l.map(q2).join(';')).join('\r\n'); const blob = new Blob(['\ufeff' + linhas], { type: 'text/csv;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'julgamentos_filtrados_' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }, N, kpis, hon, ativos, peritos, semPeritos: peritos.length === 0, tabela, vazio: N === 0, q: st.q || '', onQ: (e) => set({ q: e.target.value }), sort: () => set({ asc: !st.asc }), sortLbl: st.asc ? '↑ antigas' : '↓ recentes' },
   sv: tab === 'per' ? svPer : svMag
 };
 }
@@ -436,35 +445,7 @@ __o += "\n";
 __o += "<p" + " style=\"margin: 0; font-size: 14px; line-height: 1.6; color: #5E625C; max-width: min(560px, 100%); width: 407px\"" + ">";
 __o += esc((vm.sub));
 __o += "</p>";
-__o += "\n";
-__o += "<div" + " style=\"display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 8px\"" + ">";
-__o += "\n";
-for (const h of ((vm.hero) || [])) {
-__o += "\n";
-__o += "<div" + " style=\"display: flex; align-items: center; gap: 14px; background: #FFFFFF; border: 1px solid #E7E8E3; border-radius: 16px; padding: 14px 22px 14px 14px; box-shadow: 0 2px 10px rgba(20,22,20,0.04); text-align: left\"" + ">";
-__o += "\n";
-__o += "<span" + " aria-hidden=\"true\"" + " style=\"width: 40px; height: 40px; border-radius: 50%; background: #D7F24B; display: flex; align-items: center; justify-content: center\"" + ">";
-__o += "<svg" + " width=\"18\"" + " height=\"18\"" + " viewBox=\"0 0 24 24\"" + " fill=\"none\"" + " stroke=\"#141614\"" + " stroke-width=\"2\"" + " stroke-linecap=\"round\"" + " stroke-linejoin=\"round\"" + ">";
-__o += "<path" + " d=\"M3 17l6-6 4 4 8-8M15 7h6v6\"" + ">";
-__o += "</path>";
-__o += "</svg>";
-__o += "</span>";
-__o += "\n";
-__o += "<span" + " style=\"display: flex; flex-direction: column; gap: 2px\"" + ">";
-__o += "<span" + " style=\"font-size: 12px; color: #5E625C\"" + ">";
-__o += esc((h?.k));
-__o += "</span>";
-__o += "<span" + " style=\"font-size: 20px; font-weight: 700; letter-spacing: -0.01em\"" + ">";
-__o += esc((h?.v));
-__o += "</span>";
-__o += "</span>";
-__o += "\n";
-__o += "</div>";
-__o += "\n";
-}
-__o += "\n";
-__o += "</div>";
-__o += "\n";
+__o += "\n\n";
 __o += "</section>";
 __o += "\n\n";
 __o += "<main" + " style=\"display: flex; flex-direction: column; gap: 20px; min-width: 0\"" + ">";
@@ -636,6 +617,45 @@ __o += "\n";
 }
 __o += "\n";
 __o += "</div>";
+__o += "\n\n";
+__o += "<article" + " style=\"background: #FFFFFF; border: 1px solid #E7E8E3; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 10px rgba(20,22,20,0.04)\"" + ">";
+__o += "\n";
+__o += "<div" + " style=\"background: #F6F7F3; border-radius: 14px; padding: 16px 14px 12px; display: flex; align-items: flex-end; gap: 12px; height: 220px\"" + ">";
+__o += "\n";
+for (const y of ((vm.proc?.anosCard) || [])) {
+__o += "\n";
+__o += "<button" + " data-ev=\"click:" + reg((y?.pick)) + "\"" + " aria-pressed=\"" + esc((y?.sel)) + "\"" + " title=\"" + esc((y?.tip)) + "\"" + " style=\"" + "flex: 1; min-width: 0; height: 100%; border: 0; border-radius: 10px; padding: 4px 2px 0; cursor: pointer; color: #141614; background: " + esc((y?.rbg)) + "; opacity: " + esc((y?.op)) + "; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px" + "\"" + ">";
+__o += "\n";
+__o += "<span" + " style=\"" + "font-size: 11.5px; font-weight: 700; background: " + esc((y?.tagBg)) + "; color: " + esc((y?.tagFg)) + "; border-radius: 6px; padding: 2px 8px" + "\"" + ">";
+__o += esc((y?.n));
+__o += "</span>";
+__o += "\n";
+__o += "<span" + " style=\"" + "width: 100%; max-width: 88px; height: " + esc((y?.h)) + "px; border-radius: 8px; background: " + esc((y?.bar)) + "\"" + ">";
+__o += "</span>";
+__o += "\n";
+__o += "<span" + " style=\"font-size: 12px; color: #5E625C\"" + ">";
+__o += esc((y?.k));
+__o += "</span>";
+__o += "\n";
+__o += "</button>";
+__o += "\n";
+}
+__o += "\n";
+__o += "</div>";
+__o += "\n";
+__o += "<div" + " style=\"display: flex; flex-direction: column; gap: 6px\"" + ">";
+__o += "\n";
+__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
+__o += "Julgamentos por ano";
+__o += "</h2>";
+__o += "\n";
+__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
+__o += "Quantidade de julgamentos de apela\u00e7\u00e3o por ano da decis\u00e3o, entre os " + esc((vm.proc?.anosBase)) + " que atendem aos demais filtros. O recorte vai de 2020 a 2025; anos sem julgamento da lista aparecem com zero. Clique numa barra para filtrar.";
+__o += "</p>";
+__o += "\n";
+__o += "</div>";
+__o += "\n";
+__o += "</article>";
 __o += "\n\n";
 __o += "<div" + " style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 20px\"" + ">";
 __o += "\n\n";
@@ -1359,7 +1379,7 @@ __o += "<th" + " style=\"padding: 12px 4px; font-weight: 500; text-align: center
 __o += "\u00c0s vezes";
 __o += "</th>";
 __o += "<th" + " style=\"padding: 12px 4px; font-weight: 500; text-align: center; width: 74px; font-size: 11.5px; line-height: 1.3\"" + ">";
-__o += "Frequente&shy;mente";
+__o += "Frequente\u00admente";
 __o += "</th>";
 __o += "<th" + " style=\"padding: 12px 4px; font-weight: 500; text-align: center; width: 74px; font-size: 11.5px; line-height: 1.3\"" + ">";
 __o += "Sempre";
