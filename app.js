@@ -751,11 +751,14 @@ __o += "</div>";
 __o += "\n";
 }
 __o += "\n";
-__o += "<span" + " style=\"flex: 1 1 0\"" + ">";
-__o += "</span>";
-__o += "\n";
-__o += "<button" + " data-ev=\"click:" + reg((vm.limpar)) + "\"" + " style=\"border: 1px solid #E4E6E0; background: #F6F7F3; color: #141614; border-radius: 999px; padding: 9px 14px; font-size: 12.5px; font-weight: 500; cursor: pointer\"" + ">";
+__o += "<button" + " class=\"btn-limpar\"" + " data-ev=\"click:" + reg((vm.limpar)) + "\"" + " aria-label=\"Limpar todos\"" + " style=\"position: relative; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: 1px solid #E4E6E0; background: #F6F7F3; color: #141614; border-radius: 50%; padding: 0; cursor: pointer\"" + ">";
+__o += "<svg" + " aria-hidden=\"true\"" + " width=\"16\"" + " height=\"16\"" + " viewBox=\"0 0 24 24\"" + " fill=\"none\"" + " stroke=\"#141614\"" + " stroke-width=\"2\"" + " stroke-linecap=\"round\"" + " stroke-linejoin=\"round\"" + ">";
+__o += "<path" + " d=\"M7 21l-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9\"" + ">";
+__o += "</path>";
+__o += "</svg>";
+__o += "<span" + " class=\"dica-limpar\"" + " style=\"position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #141614; color: #FFFFFF; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 40\"" + ">";
 __o += "Limpar todos";
+__o += "</span>";
 __o += "</button>";
 __o += "\n";
 __o += "</div>";
