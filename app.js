@@ -118,12 +118,29 @@ const rotCat = (v, col) => {
 };
 // Formação dos peritos: classificação por palavras-chave do texto da coluna FORMAÇÕES DO PERITO (um processo pode ter várias)
 const FORM_REGRAS = [['Engenharia mecânica', /MECANIC/], ['Engenharia civil', /CIVIL/], ['Engenharia elétrica ou eletrônica', /ELETRONIC|ELETRIC/], ['Engenharia de produção', /ENGENHARIA DE PRODUCAO/], ['Ciências contábeis', /CONTAB|CONTADOR/], ['Design industrial', /DESIGN/], ['Propriedade intelectual', /PROPRIEDADE (INTELECTUAL|INDUSTRIAL)|AGENTE DA PROPRIEDADE/], ['Direito', /JURIDIC|DIREITO/], ['Física', /FISIC/]];
-const formacoesDe = (v) => {
+const formsTxt = (u) => { const out = FORM_REGRAS.filter(([, re]) => re.test(u)).map(([k]) => k); if (/ENGENH/.test(u) && !out.some(k => k.startsWith('Engenharia'))) out.push('Engenharia (área não informada)'); return out; };
+// Peritos citados no texto: cada nome recebe as formações do trecho que vem depois dele (até o próximo nome ou separador).
+const NAO_NOME = /^(Engenh|Tecnolog|Instala|Industri|Doutor|Mestre|Designer|Ci[eê]ncias|Cont[aá]b|T[eé]cnic|Bacharel|Per[ií]ci|Gest[aã]o|Tribut|Jur[ií]dic|Sociais|Seguran|Trabalho|Propriedade|Agente|Laudos?|Processo|Lei|F[ií]sica|Direito|Conhecimento|Os|Vara|Comarca|Justi|Tribunal|Licenciad|Membro|Especiali|Civil|Mec[aâ]nic|Produ|Sistema|Judicial|Mestrad|Doutorad)/;
+const NOME = /(?:[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõçü]+|[A-Z]\.)(?:\s+(?:(?:da|de|do|dos|das)\s+)?(?:[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõçü]+(?:['’][A-Z][a-z]+)?|[A-Z]\.))+/g;
+const peritosDe = (txt) => {
+  const t = String(txt || ''); const u0 = semAc(t);
+  if (!u0 || u0 === '-' || u0.startsWith('NAO IDENT') || u0.startsWith('SEM PERICIA')) return [];
+  const pedacos = t.split(/\s\|\s|\[|\]|(?<=[a-z\d)]{2})\.\s+(?=[A-ZÁÉÍÓÚ])/);
+  const res = [];
+  pedacos.forEach(p => {
+    const nomes = [];
+    let m; NOME.lastIndex = 0;
+    while ((m = NOME.exec(p))) { const nm = m[0].trim(); const pal = nm.split(/\s+/); if (/\b(VF|Vara|Comarca|de|em|do|da)\s+$/.test(p.slice(Math.max(0, m.index - 8), m.index)) || NAO_NOME.test(pal[0]) || pal.filter(w => !/^(da|de|do|dos|das)$/.test(w)).length < 2 || pal.some(w => NAO_NOME.test(w) && w.length > 3)) continue; nomes.push({ nm, i: m.index, f: m.index + nm.length }); }
+    if (!nomes.length) { const f = formsTxt(semAc(p)); if (f.length) res.push({ nome: '', forms: f }); return; }
+    nomes.forEach((n, k) => { const fim = k + 1 < nomes.length ? nomes[k + 1].i : p.length; let f = formsTxt(semAc(p.slice(n.f, fim))); if (!f.length && k === 0) f = formsTxt(semAc(p.slice(0, n.i))); res.push({ nome: n.nm, forms: f }); });
+  });
+  const por = {}; res.forEach(x => { const k = x.nome || ''; por[k] = por[k] || { nome: x.nome, forms: [] }; x.forms.forEach(f => { if (!por[k].forms.includes(f)) por[k].forms.push(f); }); });
+  return Object.values(por);
+};
+const formacoesDe = (peritos, v) => {
   const u = semAc(v);
   if (!u || u === '-') return [];
-  if (u.startsWith('NAO IDENT')) return ['Não identificada'];
-  const out = FORM_REGRAS.filter(([, re]) => re.test(u)).map(([k]) => k);
-  if (/ENGENH/.test(u) && !out.some(k => k.startsWith('Engenharia'))) out.push('Engenharia (área não informada)');
+  const out = []; peritos.forEach(x => x.forms.forEach(f => { if (!out.includes(f)) out.push(f); }));
   return out.length ? out : ['Não identificada'];
 };
 const proc1gDe = (v) => { const u = semAc(v); if (!u || u === '-') return ''; if (u.startsWith('SOLICITAR') || u.startsWith('BAIXAR')) return 'Não analisado'; if (u.includes('NAO LOCALIZADO')) return 'Não localizado'; return String(v).trim(); };
@@ -141,7 +158,7 @@ const J = PRAW.slice(1).filter(row => cel(row, 'Nº PROCESSO')).map((row, i) => 
   const pt = cel(row, 'PERITO'), ptU = semAc(pt);
   const nP = cel(row, 'NÚMERO DE PERITOS');
   return {
-    id: pad2(i + 1), num, relator: textoDe(cel(row, 'RELATORIA')), indexa: textoDe(cel(row, 'PALAVRAS-CHAVE INDEXADORAS')), ementa: textoDe(cel(row, 'EMENTA')), resumo: textoDe(cel(row, 'RESUMO DO CASO E DA ESSÊNCIA DA DECISÃO')), p1g: proc1gDe(cel(row, 'PROCESSO - 1º GRAU')), vara: textoDe(cel(row, 'VARA DE ORIGEM')), forms: formacoesDe(cel(row, 'FORMAÇÕES DO PERITO')), cnj: mC ? mC[1] : (m5 ? m5[1] : num.split(' ')[0]), data, ano,
+    id: pad2(i + 1), num, relator: textoDe(cel(row, 'RELATORIA')), indexa: textoDe(cel(row, 'PALAVRAS-CHAVE INDEXADORAS')), ementa: textoDe(cel(row, 'EMENTA')), resumo: textoDe(cel(row, 'RESUMO DO CASO E DA ESSÊNCIA DA DECISÃO')), p1g: proc1gDe(cel(row, 'PROCESSO - 1º GRAU')), vara: textoDe(cel(row, 'VARA DE ORIGEM')), peritosF: peritosDe(cel(row, 'FORMAÇÕES DO PERITO')), forms: formacoesDe(peritosDe(cel(row, 'FORMAÇÕES DO PERITO')), cel(row, 'FORMAÇÕES DO PERITO')), cnj: mC ? mC[1] : (m5 ? m5[1] : num.split(' ')[0]), data, ano,
     camara: camaraDe(cel(row, 'CÂMARA')),
     ativos: Array.from(new Set(cel(row, 'ATIVO DE PI').split(/;|\s+e\s+/).map(rotAtivo).filter(Boolean))),
     pericia: pu === 'SIM' ? 'Sim' : pu === 'NAO' ? 'Não' : pu.startsWith('VERIFICAR') ? 'A verificar no processo' : 'Não informado',
@@ -354,8 +371,10 @@ const colsDd = { open: colsOpen, sum: colsVis.length === COLS.length ? 'Todos' :
 const baseForm = J.filter(r => r.forms.length && passAll(r, 'form'));
 const formProcCont = FORMS.map(f => ({ f, n: baseForm.filter(r => r.forms.includes(f)).length }));
 const maxF = Math.max(1, ...formProcCont.map(x => x.n));
-const formacoes = formProcCont.slice().sort((a, b) => (a.f === 'Não identificada') - (b.f === 'Não identificada') || b.n - a.n).map(({ f, n }) => { const sel = has('form', f); const ts = any('form');
-  return { k: f, n: String(n), h: Math.max(4, Math.round(150 * n / maxF)), sel, op: ts && !sel ? 0.45 : 1, bar: sel ? VERDE_E : (f === 'Não identificada' ? '#C9CCC4' : VERDE), rbg: sel ? '#F1F7D9' : 'transparent', tip: f + ': ' + n + ' de ' + baseForm.length + ' ' + plural(baseForm.length, 'processo', 'processos') + ' com formação do perito registrada (' + pctTxt(n, baseForm.length) + '). Clique para filtrar.', pick: () => tog('form', f) }; });
+const formacoes = formProcCont.slice().sort((a, b) => (a.f === 'Não identificada') - (b.f === 'Não identificada') || b.n - a.n).map(({ f, n }, i, arr) => { const al = i < 2 ? 'left: 0' : (i >= arr.length - 2 ? 'right: 0' : 'left: 50%; transform: translateX(-50%)'); const sel = has('form', f); const ts = any('form');
+  const nomes = []; baseForm.filter(r => r.forms.includes(f)).forEach(r => r.peritosF.filter(x => x.forms.includes(f)).forEach(x => { const nm = x.nome || 'Perito sem nome identificado na planilha'; if (!nomes.includes(nm)) nomes.push(nm); }));
+  if (f === 'Não identificada') baseForm.filter(r => r.forms.includes(f)).forEach(r => { const nm = 'Sem nome nem formação identificados (' + r.cnj + ')'; if (!nomes.includes(nm)) nomes.push(nm); });
+  return { k: f, al, n: String(n), nomes: nomes.map(t => ({ t })), temNomes: nomes.length > 0, h: Math.max(4, Math.round(150 * n / maxF)), sel, op: ts && !sel ? 0.45 : 1, bar: sel ? VERDE_E : (f === 'Não identificada' ? '#C9CCC4' : VERDE), rbg: sel ? '#F1F7D9' : 'transparent', tip: f + ': ' + n + ' de ' + baseForm.length + ' ' + plural(baseForm.length, 'processo', 'processos') + ' com formação do perito registrada (' + pctTxt(n, baseForm.length) + '). Clique para filtrar.', pick: () => tog('form', f) }; });
 // Seções do processo de 1º grau
 const CATORD = ['Sim', 'Não', 'Ambas as partes', 'Autor', 'Réu', 'Autor e réu', 'Deferida', 'Indeferida', 'Múltiplas decisões', 'Cadastro judicial', 'Nenhum', '1 perito', '2 peritos', '3 peritos', 'Não identificado', 'Não se aplica', 'Sem registro'];
 const CINZA = ['Não identificado', 'Não se aplica', 'Sem registro'];
@@ -1020,6 +1039,12 @@ __o += "</article>";
 __o += "\n\n";
 __o += "<article" + " style=\"background: #FFFFFF; border: 1px solid #E7E8E3; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 10px rgba(20,22,20,0.04)\"" + ">";
 __o += "\n";
+__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
+__o += "Ativos discutidos nos julgamentos";
+__o += "</h2>";
+__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
+__o += "Julgamentos por ativo de propriedade intelectual. Um julgamento pode envolver dois ativos, ent\u00e3o a soma passa do total. Clique numa barra para filtrar.";
+__o += "</p>";
 __o += "<div" + " style=\"background: #F6F7F3; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px\"" + ">";
 __o += "\n";
 for (const a of ((vm.proc?.ativos) || [])) {
@@ -1046,15 +1071,7 @@ __o += "\n";
 __o += "</div>";
 __o += "\n";
 __o += "<div" + " style=\"display: flex; flex-direction: column; gap: 6px\"" + ">";
-__o += "\n";
-__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
-__o += "Ativos discutidos nos julgamentos";
-__o += "</h2>";
-__o += "\n";
-__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
-__o += "Julgamentos por ativo de propriedade intelectual, conforme a coluna ATIVO DE PI. Um julgamento pode envolver dois ativos, ent\u00e3o a soma passa do total. Clique numa barra para filtrar.";
-__o += "</p>";
-__o += "\n";
+__o += "\n\n\n";
 __o += "</div>";
 __o += "\n";
 __o += "</article>";
@@ -1065,6 +1082,14 @@ __o += "<div" + " style=\"display: grid; grid-template-columns: repeat(auto-fit,
 __o += "\n\n";
 __o += "<article" + " style=\"background: #FFFFFF; border: 1px solid #E7E8E3; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 10px rgba(20,22,20,0.04)\"" + ">";
 __o += "\n";
+__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
+__o += "Peso do laudo na decis\u00e3o";
+__o += "</h2>";
+__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
+__o += "Classifica\u00e7\u00e3o registrada na sele\u00e7\u00e3o para os " + esc((vm.proc?.pesoBase)) + " processos. ";
+__o += "<br" + ">";
+__o += "Clique num bloco para filtrar.";
+__o += "</p>";
 __o += "<div" + " style=\"background: #F6F7F3; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px\"" + ">";
 __o += "\n";
 __o += "<div" + " style=\"display: flex; height: 18px; border-radius: 999px; overflow: hidden; background: #E3E5DF\"" + ">";
@@ -1105,21 +1130,21 @@ __o += "\n";
 __o += "</div>";
 __o += "\n";
 __o += "<div" + " style=\"display: flex; flex-direction: column; gap: 6px\"" + ">";
-__o += "\n";
-__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
-__o += "Peso da prova t\u00e9cnica na decis\u00e3o";
-__o += "</h2>";
-__o += "\n";
-__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
-__o += "Classifica\u00e7\u00e3o registrada na planilha para os " + esc((vm.proc?.pesoBase)) + " processos do filtro com dados do 1\u00ba grau. Os demais julgamentos ainda n\u00e3o t\u00eam essa an\u00e1lise. Clique num bloco para filtrar.";
-__o += "</p>";
-__o += "\n";
+__o += "\n\n\n";
 __o += "</div>";
 __o += "\n";
 __o += "</article>";
 __o += "\n\n";
 __o += "<article" + " style=\"background: #FFFFFF; border: 1px solid #E7E8E3; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 10px rgba(20,22,20,0.04)\"" + ">";
 __o += "\n";
+__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
+__o += "Acolhimento do laudo";
+__o += "</h2>";
+__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
+__o += "Como o laudo pericial foi acolhido na senten\u00e7a e no ac\u00f3rd\u00e3o. ";
+__o += "<br" + ">";
+__o += "Clique numa c\u00e9lula para filtrar.";
+__o += "</p>";
 __o += "<div" + " style=\"background: #F6F7F3; border-radius: 14px; padding: 16px; overflow-x: auto\"" + ">";
 __o += "\n";
 __o += "<div" + " style=\"" + "display: grid; grid-template-columns: " + esc((vm.proc?.acol?.gtc)) + "; gap: 6px; min-width: 380px; font-size: 12px" + "\"" + ">";
@@ -1153,15 +1178,7 @@ __o += "\n";
 __o += "</div>";
 __o += "\n";
 __o += "<div" + " style=\"display: flex; flex-direction: column; gap: 6px\"" + ">";
-__o += "\n";
-__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
-__o += "O laudo no 1\u00ba e no 2\u00ba grau";
-__o += "</h2>";
-__o += "\n";
-__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
-__o += "Como o laudo pericial foi acolhido na senten\u00e7a (linhas) e no ac\u00f3rd\u00e3o (colunas), nos " + esc((vm.proc?.acol?.base)) + " processos do filtro com dados do 1\u00ba grau. \u201cN\u00e3o se aplica\u201d corresponde ao \u201c-\u201d da planilha; \u201cSem registro\u201d, a campo vazio. Clique numa c\u00e9lula para filtrar.";
-__o += "</p>";
-__o += "\n";
+__o += "\n\n\n";
 __o += "</div>";
 __o += "\n";
 __o += "</article>";
@@ -1170,11 +1187,30 @@ __o += "</div>";
 __o += "\n\n";
 __o += "<article" + " style=\"background: #FFFFFF; border: 1px solid #E7E8E3; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 10px rgba(20,22,20,0.04)\"" + ">";
 __o += "\n";
+__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
+__o += "Forma\u00e7\u00e3o dos peritos";
+__o += "</h2>";
+__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
+__o += ". Um processo pode ter peritos de mais de uma \u00e1rea, ou um mesmo perito pode ter mais de uma forma\u00e7\u00e3o. Clique numa barra para filtrar.";
+__o += "</p>";
 __o += "<div" + " style=\"background: #F6F7F3; border-radius: 14px; padding: 16px 14px 12px; display: flex; align-items: flex-end; gap: 10px; height: 250px; overflow-x: auto\"" + ">";
 __o += "\n";
 for (const y of ((vm.proc?.formacoes) || [])) {
 __o += "\n";
-__o += "<button" + " data-ev=\"click:" + reg((y?.pick)) + "\"" + " aria-pressed=\"" + esc((y?.sel)) + "\"" + " title=\"" + esc((y?.tip)) + "\"" + " style=\"" + "flex: 1 0 74px; min-width: 74px; height: 100%; border: 0; border-radius: 10px; padding: 4px 2px 0; cursor: pointer; color: #141614; background: " + esc((y?.rbg)) + "; opacity: " + esc((y?.op)) + "; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px" + "\"" + ">";
+__o += "<button" + " class=\"barra-form\"" + " data-ev=\"click:" + reg((y?.pick)) + "\"" + " aria-pressed=\"" + esc((y?.sel)) + "\"" + " aria-label=\"" + esc((y?.tip)) + "\"" + " style=\"" + "position: relative; flex: 1 0 74px; min-width: 74px; height: 100%; border: 0; border-radius: 10px; padding: 4px 2px 0; cursor: pointer; color: #141614; background: " + esc((y?.rbg)) + "; opacity: " + esc((y?.op)) + "; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px" + "\"" + ">";
+__o += "\n";
+if ((y?.temNomes)) {
+__o += "<span" + " class=\"dica-form\"" + " style=\"" + "position: absolute; top: 0; " + esc((y?.al)) + "; width: 200px; background: #141614; color: #FFFFFF; border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.4; text-align: left; pointer-events: none; z-index: 20; display: flex; flex-direction: column; gap: 3px" + "\"" + ">";
+__o += "<strong" + " style=\"font-weight: 700; color: #D7F24B\"" + ">";
+__o += esc((y?.k));
+__o += "</strong>";
+for (const nm of ((y?.nomes) || [])) {
+__o += "<span" + ">";
+__o += esc((nm?.t));
+__o += "</span>";
+}
+__o += "</span>";
+}
 __o += "\n";
 __o += "<span" + " style=\"font-size: 12px; font-weight: 700\"" + ">";
 __o += esc((y?.n));
@@ -1194,15 +1230,7 @@ __o += "\n";
 __o += "</div>";
 __o += "\n";
 __o += "<div" + " style=\"display: flex; flex-direction: column; gap: 6px\"" + ">";
-__o += "\n";
-__o += "<h2" + " style=\"margin: 0; font-size: 15px; font-weight: 600\"" + ">";
-__o += "Forma\u00e7\u00e3o dos peritos";
-__o += "</h2>";
-__o += "\n";
-__o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C\"" + ">";
-__o += "Processos em que algum perito tem a forma\u00e7\u00e3o, do maior para o menor, entre os " + esc((vm.proc?.formBase)) + " com forma\u00e7\u00e3o registrada. As \u00e1reas v\u00eam de palavras-chave da coluna FORMA\u00c7\u00d5ES DO PERITO; um processo pode ter peritos de mais de uma \u00e1rea. Clique numa barra para filtrar.";
-__o += "</p>";
-__o += "\n";
+__o += "\n\n\n";
 __o += "</div>";
 __o += "\n";
 __o += "</article>";
@@ -1210,11 +1238,11 @@ __o += "\n\n";
 __o += "<div" + " style=\"display: flex; flex-direction: column; gap: 6px; padding: 8px 4px 0\"" + ">";
 __o += "\n";
 __o += "<h2" + " style=\"margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em\"" + ">";
-__o += "No processo de 1\u00ba grau";
+__o += "O processo de 1\u00ba grau, que originou os ac\u00f3rd\u00e3os";
 __o += "</h2>";
 __o += "\n";
 __o += "<p" + " style=\"margin: 0; font-size: 12.5px; line-height: 1.55; color: #5E625C; max-width: 760px\"" + ">";
-__o += "Como a per\u00edcia correu no processo de conhecimento ligado a cada ac\u00f3rd\u00e3o. H\u00e1 dados do 1\u00ba grau para " + esc((vm.proc?.g1Base)) + " dos " + esc((vm.proc?.N)) + " julgamentos do filtro; os demais ainda n\u00e3o foram analisados. Cinza: n\u00e3o se aplica, n\u00e3o identificado ou sem registro. Clique numa barra ou fatia para filtrar o painel.";
+__o += "Analise como a per\u00edcia ocorreu no processo de conhecimento ligado a cada ac\u00f3rd\u00e3o. H\u00e1 dados do 1\u00ba grau para " + esc((vm.proc?.g1Base)) + " dos " + esc((vm.proc?.N)) + " julgamentos do filtro; os demais ainda n\u00e3o foram analisados. Cinza: n\u00e3o se aplica, n\u00e3o identificado ou sem registro. Clique numa barra ou fatia para filtrar o painel.";
 __o += "</p>";
 __o += "\n";
 __o += "</div>";
