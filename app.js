@@ -225,6 +225,7 @@ const ck = (k) => ({ chipBg: CH[k][0], chipFg: CH[k][1] });
 const tab = st.tab || 'proc';
 // ---- Processos: filtros (menus e cliques). Cada gráfico ignora o próprio filtro para continuar mostrando as alternativas.
 const plural = (n, s, p) => n === 1 ? s : p;
+const ICON_MARTELO = 'M14.5 12.5l-8 8a2.12 2.12 0 0 1-3-3l8-8M16 16l6-6M8 8l6-6M9 7l8 8M21 11l-8-8';
 const VERDE = '#A3C826', VERDE_E = '#4F7A00', VERDE_C = '#D7F24B';
 const T = J.length;
 const ordem = (vals, pref) => Array.from(new Set(vals.filter(v => v !== null && v !== undefined))).sort((a, b) => { const ia = pref.indexOf(a), ib = pref.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a).localeCompare(String(b), 'pt'); });
@@ -313,7 +314,7 @@ const pesoBase = F.filter(r => ['Determinante', 'Concorrente', 'Indeterminável'
 const det = pesoBase.filter(r => r.peso === 'Determinante').length;
 const camTxt = CAMS.map(c => c.replace(' Câmara Cível', '')).join(' e ') + (CAMS.length > 1 ? ' Câmaras Cíveis' : ' Câmara Cível');
 const kpis = [
-  { k: 'Julgamentos no filtro', v: N + ' de ' + T, s: 'Apelações da ' + camTxt + ', ' + ANO0 + '–' + ANO1, chip: 'Calculável', ...ck('ok'), ic: ICON.doc, icBg: '#F6F7F3', tip: 'Julgamentos de apelação da planilha que atendem aos filtros e seleções atuais, de um total de ' + T + '.' },
+  { k: 'Julgamentos no filtro', v: N + ' de ' + T, s: 'Apelações da ' + camTxt + ', ' + ANO0 + '–' + ANO1, chip: 'Calculável', ...ck('ok'), ic: ICON_MARTELO, icBg: '#F6F7F3', tip: 'Julgamentos de apelação da planilha que atendem aos filtros e seleções atuais, de um total de ' + T + '.' },
   { k: 'Com perícia realizada', v: N ? comPer + ' de ' + N : 'Sem base para cálculo', s: (N ? pctTxt(comPer, N) + ' do filtro' : '') + (aVer ? ' · ' + aVer + ' a verificar no processo' : ''), chip: aVer ? 'Com ressalvas' : 'Calculável', ...ck(aVer ? 'warn' : 'ok'), ic: ICON.pess, icBg: '#F6F7F3', tip: 'Julgamentos em que houve perícia realizada no processo (coluna PERÍCIA = SIM). Os marcados como “verificar no processo” não entram como sim nem como não.' },
   { k: 'Prova técnica determinante', v: pesoBase.length ? det + ' de ' + pesoBase.length : 'Sem base para cálculo', s: (pesoBase.length ? pctTxt(det, pesoBase.length) + ' dos classificados · ' : '') + g1N + ' ' + plural(g1N, 'processo', 'processos') + ' com dados do 1º grau', chip: 'Com ressalvas', ...ck('warn'), ic: ICON.laudo, icBg: '#D7F24B', tip: 'Entre os processos com o peso da prova técnica classificado (determinante, concorrente ou indeterminável), quantos tiveram a prova técnica como decisiva. Só os processos com dados do 1º grau têm essa classificação.' },
   { k: 'Honorários ' + hon.rotulo.toLowerCase(), v: hon.faixa, s: hon.nTxt + ' com valor · nominais, sem correção', chip: hon.tem ? 'Com ressalvas' : 'Sem base', ...ck(hon.tem ? 'warn' : 'pend'), ic: ICON.din, icBg: '#F6F7F3', tip: 'Menor e maior valor de honorários periciais ' + hon.rotulo.toLowerCase() + ' nos julgamentos do filtro. Valores da época, sem correção monetária.' }
